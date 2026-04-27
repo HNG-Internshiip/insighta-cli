@@ -2,25 +2,28 @@
   "name": "insighta-cli",
   "version": "3.0.0",
   "description": "Insighta Labs CLI",
-  "bin": { "insighta": "./dist/index.js" },
+  "bin": {
+    "insighta": "./dist/index.js"
+  },
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "dev":   "ts-node src/index.ts",
-    "lint":  "eslint 'src/**/*.ts'",
-    "test":  "echo 'no tests yet' && exit 0"
+    "dev": "ts-node src/index.ts",
+    "lint": "eslint 'src/**/*.ts'",
+    "test": "echo 'no tests yet' && exit 0"
   },
   "dependencies": {
-    "axios":    "^1.6.8",
-    "chalk":    "^5.3.0",
+    "axios": "^1.6.8",
+    "chalk": "^5.3.0",
     "cli-table3": "^0.6.3",
-    "commander":"^12.0.0",
-    "open":     "^10.1.0",
-    "ora":      "^8.0.1"
+    "commander": "^12.0.0",
+    "dotenv": "^17.4.2",
+    "open": "^10.1.0",
+    "ora": "^8.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
-    "ts-node":     "^10.9.2",
-    "typescript":  "^5.4.5"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
   }
 }

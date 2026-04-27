@@ -1,228 +1,232 @@
 #!/usr/bin/env node
 import "dotenv/config";
-import { Command }    from "commander";
-import chalk          from "chalk";
-import ora            from "ora";
-import Table          from "cli-table3";
-import http           from "http";
-import crypto         from "crypto";
-import open           from "open";
-import fs             from "fs";
-import path           from "path";
-import axios          from "axios";
-import { saveCredentials, loadCredentials,
-         clearCredentials }               from "./credentials";
-import { listProfiles, getProfile,
-         searchProfiles, createProfile,
-         exportProfiles, apiLogout }      from "./api";
+import { Command } from "commander";
+import chalk from "chalk";
+import ora from "ora";
+import Table from "cli-table3";
+import http from "http";
+import crypto from "crypto";
+import open from "open";
+import fs from "fs";
+import path from "path";
+import axios from "axios";
+import {
+	saveCredentials, loadCredentials,
+	clearCredentials
+} from "./credentials";
+import {
+	listProfiles, getProfile,
+	searchProfiles, createProfile,
+	exportProfiles, apiLogout
+} from "./api";
 
-const BASE    = process.env.INSIGHTA_API_URL || "https://your-backend.railway.app";
+const BASE = process.env.INSIGHTA_API_URL || "https://your-backend.railway.app";
 const program = new Command();
 
 program
-  .name("insighta")
-  .description("Insighta Labs CLI")
-  .version("3.0.0");
+	.name("insighta")
+	.description("Insighta Labs CLI")
+	.version("3.0.0");
 
 // ── insighta login ────────────────────────────────────────────────────────────
 program.command("login").description("Authenticate via GitHub OAuth").action(async () => {
-  const spin = ora("Starting GitHub OAuth flow...").start();
+	const spin = ora("Starting GitHub OAuth flow...").start();
 
-  // PKCE
-  const verifier   = crypto.randomBytes(32).toString("base64url");
-  const challenge  = crypto.createHash("sha256").update(verifier).digest("base64url");
-  const state      = crypto.randomBytes(16).toString("hex");
+	// PKCE
+	const verifier = crypto.randomBytes(32).toString("base64url");
+	const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+	const state = crypto.randomBytes(16).toString("hex");
 
-  // Local callback server on random available port
-  await new Promise<void>((resolve, reject) => {
-    const server = http.createServer(async (req, res) => {
-      const url    = new URL(req.url!, `http://localhost`);
-      const code   = url.searchParams.get("code");
-      const cbState= url.searchParams.get("state");
+	// Local callback server on random available port
+	await new Promise<void>((resolve, reject) => {
+		const server = http.createServer(async (req, res) => {
+			const url = new URL(req.url!, `http://localhost`);
+			const code = url.searchParams.get("code");
+			const cbState = url.searchParams.get("state");
 
-      if (!code || cbState !== state) {
-        res.end("<h2>Invalid callback. Please try again.</h2>");
-        server.close();
-        reject(new Error("Invalid OAuth state"));
-        return;
-      }
+			if (!code || cbState !== state) {
+				res.end("<h2>Invalid callback. Please try again.</h2>");
+				server.close();
+				reject(new Error("Invalid OAuth state"));
+				return;
+			}
 
-      try {
-        // Pass code_verifier to backend for PKCE verification
-        const cbRes = await axios.get(
-          `${BASE}/auth/github/callback`,
-          { params: { code, state, code_verifier: verifier } }
-        );
-        const { access_token, refresh_token, username, role } = cbRes.data;
+			try {
+				// Pass code_verifier to backend for PKCE verification
+				const cbRes = await axios.get(
+					`${BASE}/auth/github/callback`,
+					{ params: { code, state, code_verifier: verifier } }
+				);
+				const { access_token, refresh_token, username, role } = cbRes.data;
 
-        saveCredentials({ access_token, refresh_token, username, role });
+				saveCredentials({ access_token, refresh_token, username, role });
 
-        res.end(`<h2>Logged in as @${username}. You can close this tab.</h2>`);
-        server.close();
-        spin.succeed(chalk.green(`Logged in as @${username} (${role})`));
-        resolve();
-      } catch (e: any) {
-        res.end("<h2>Authentication failed. Please try again.</h2>");
-        server.close();
-        reject(e);
-      }
-    });
+				res.end(`<h2>Logged in as @${username}. You can close this tab.</h2>`);
+				server.close();
+				spin.succeed(chalk.green(`Logged in as @${username} (${role})`));
+				resolve();
+			} catch (e: any) {
+				res.end("<h2>Authentication failed. Please try again.</h2>");
+				server.close();
+				reject(e);
+			}
+		});
 
-    server.listen(0, "127.0.0.1", () => {
-      const port = (server.address() as any).port;
-      const authUrl = `${BASE}/auth/github?code_challenge=${challenge}&from=cli&state=${state}`;
-      spin.text = `Opening browser... (port ${port})`;
-      open(authUrl).catch(() => {
-        spin.warn(`Open this URL in your browser:\n${authUrl}`);
-      });
-    });
+		server.listen(0, "127.0.0.1", () => {
+			const port = (server.address() as any).port;
+			const authUrl = `${BASE}/auth/github?code_challenge=${challenge}&from=cli&state=${state}`;
+			spin.text = `Opening browser... (port ${port})`;
+			open(authUrl).catch(() => {
+				spin.warn(`Open this URL in your browser:\n${authUrl}`);
+			});
+		});
 
-    server.on("error", reject);
-    // Timeout after 5 min
-    setTimeout(() => { server.close(); reject(new Error("Login timed out")); }, 5 * 60_000);
-  });
+		server.on("error", reject);
+		// Timeout after 5 min
+		setTimeout(() => { server.close(); reject(new Error("Login timed out")); }, 5 * 60_000);
+	});
 });
 
 // ── insighta logout ───────────────────────────────────────────────────────────
 program.command("logout").description("Log out and clear credentials").action(async () => {
-  const creds = loadCredentials();
-  if (!creds) { console.log(chalk.yellow("Not logged in.")); return; }
-  const spin = ora("Logging out...").start();
-  try {
-    await apiLogout(creds.refresh_token);
-  } catch { /* server may be unreachable */ }
-  clearCredentials();
-  spin.succeed(chalk.green("Logged out."));
+	const creds = loadCredentials();
+	if (!creds) { console.log(chalk.yellow("Not logged in.")); return; }
+	const spin = ora("Logging out...").start();
+	try {
+		await apiLogout(creds.refresh_token);
+	} catch { /* server may be unreachable */ }
+	clearCredentials();
+	spin.succeed(chalk.green("Logged out."));
 });
 
 // ── insighta whoami ───────────────────────────────────────────────────────────
 program.command("whoami").description("Show current user").action(() => {
-  const creds = loadCredentials();
-  if (!creds) { console.log(chalk.yellow("Not logged in.")); return; }
-  console.log(chalk.cyan(`@${creds.username}`) + chalk.gray(` (${creds.role})`));
+	const creds = loadCredentials();
+	if (!creds) { console.log(chalk.yellow("Not logged in.")); return; }
+	console.log(chalk.cyan(`@${creds.username}`) + chalk.gray(` (${creds.role})`));
 });
 
 // ── insighta profiles ─────────────────────────────────────────────────────────
 const profiles = program.command("profiles").description("Profile commands");
 
 profiles
-  .command("list")
-  .description("List profiles with optional filters")
-  .option("--gender <gender>")
-  .option("--country <country_id>")
-  .option("--age-group <age_group>")
-  .option("--min-age <n>",    undefined, parseInt)
-  .option("--max-age <n>",    undefined, parseInt)
-  .option("--sort-by <field>","Sort field (age|created_at|gender_probability)", "created_at")
-  .option("--order <order>",  "asc or desc", "asc")
-  .option("--page <n>",       undefined, parseInt)
-  .option("--limit <n>",      undefined, parseInt)
-  .action(async (opts) => {
-    const spin = ora("Fetching profiles...").start();
-    try {
-      const params: Record<string, unknown> = {};
-      if (opts.gender)    params.gender    = opts.gender;
-      if (opts.country)   params.country_id= opts.country;
-      if (opts.ageGroup)  params.age_group = opts.ageGroup;
-      if (opts.minAge)    params.min_age   = opts.minAge;
-      if (opts.maxAge)    params.max_age   = opts.maxAge;
-      if (opts.sortBy)    params.sort_by   = opts.sortBy;
-      if (opts.order)     params.order     = opts.order;
-      if (opts.page)      params.page      = opts.page;
-      if (opts.limit)     params.limit     = opts.limit;
+	.command("list")
+	.description("List profiles with optional filters")
+	.option("--gender <gender>")
+	.option("--country <country_id>")
+	.option("--age-group <age_group>")
+	.option("--min-age <n>", "Minimum age", (v) => parseInt(v, 10))
+	.option("--max-age <n>", "Maximum age", (v) => parseInt(v, 10))
+	.option("--sort-by <field>", "Sort field (age|created_at|gender_probability)", "created_at")
+	.option("--order <order>", "asc or desc", "asc")
+	.option("--page <n>", "Page number", (v) => parseInt(v, 10))
+	.option("--limit <n>", "Results per page", (v) => parseInt(v, 10))
+	.action(async (opts) => {
+		const spin = ora("Fetching profiles...").start();
+		try {
+			const params: Record<string, unknown> = {};
+			if (opts.gender) params.gender = opts.gender;
+			if (opts.country) params.country_id = opts.country;
+			if (opts.ageGroup) params.age_group = opts.ageGroup;
+			if (opts.minAge) params.min_age = opts.minAge;
+			if (opts.maxAge) params.max_age = opts.maxAge;
+			if (opts.sortBy) params.sort_by = opts.sortBy;
+			if (opts.order) params.order = opts.order;
+			if (opts.page) params.page = opts.page;
+			if (opts.limit) params.limit = opts.limit;
 
-      const res  = await listProfiles(params);
-      const { data, total, page, limit, total_pages } = res.data;
-      spin.succeed(`${total} profiles found (page ${page}/${total_pages})`);
-      printTable(data);
-    } catch (e: any) {
-      spin.fail(chalk.red(e.message));
-    }
-  });
+			const res = await listProfiles(params);
+			const { data, total, page, limit, total_pages } = res.data;
+			spin.succeed(`${total} profiles found (page ${page}/${total_pages})`);
+			printTable(data);
+		} catch (e: any) {
+			spin.fail(chalk.red(e.message));
+		}
+	});
 
 profiles
-  .command("get <id>")
-  .description("Get a single profile by ID")
-  .action(async (id) => {
-    const spin = ora("Fetching profile...").start();
-    try {
-      const res = await getProfile(id);
-      spin.stop();
-      printTable([res.data.data]);
-    } catch (e: any) {
-      spin.fail(chalk.red(e.response?.data?.message || e.message));
-    }
-  });
+	.command("get <id>")
+	.description("Get a single profile by ID")
+	.action(async (id) => {
+		const spin = ora("Fetching profile...").start();
+		try {
+			const res = await getProfile(id);
+			spin.stop();
+			printTable([res.data.data]);
+		} catch (e: any) {
+			spin.fail(chalk.red(e.response?.data?.message || e.message));
+		}
+	});
 
 profiles
   .command("search <query>")
   .description("Natural language profile search")
-  .option("--page <n>",  undefined, parseInt)
-  .option("--limit <n>", undefined, parseInt)
-  .action(async (query, opts) => {
-    const spin = ora(`Searching: "${query}"...`).start();
-    try {
-      const params: Record<string, unknown> = {};
-      if (opts.page)  params.page  = opts.page;
-      if (opts.limit) params.limit = opts.limit;
-      const res = await searchProfiles(query, params);
-      const { data, total, page, total_pages } = res.data;
-      spin.succeed(`${total} results (page ${page}/${total_pages})`);
-      printTable(data);
-    } catch (e: any) {
-      spin.fail(chalk.red(e.response?.data?.message || e.message));
-    }
-  });
+  .option("--page <n>",  "Page number",      (v: string) => parseInt(v, 10))
+  .option("--limit <n>", "Results per page",  (v: string) => parseInt(v, 10))
+	.action(async (query, opts) => {
+		const spin = ora(`Searching: "${query}"...`).start();
+		try {
+			const params: Record<string, unknown> = {};
+			if (opts.page) params.page = opts.page;
+			if (opts.limit) params.limit = opts.limit;
+			const res = await searchProfiles(query, params);
+			const { data, total, page, total_pages } = res.data;
+			spin.succeed(`${total} results (page ${page}/${total_pages})`);
+			printTable(data);
+		} catch (e: any) {
+			spin.fail(chalk.red(e.response?.data?.message || e.message));
+		}
+	});
 
 profiles
-  .command("create")
-  .description("Create a new profile (admin only)")
-  .requiredOption("--name <name>")
-  .action(async (opts) => {
-    const spin = ora(`Creating profile for "${opts.name}"...`).start();
-    try {
-      const res = await createProfile(opts.name);
-      spin.succeed(chalk.green("Profile created"));
-      printTable([res.data.data]);
-    } catch (e: any) {
-      spin.fail(chalk.red(e.response?.data?.message || e.message));
-    }
-  });
+	.command("create")
+	.description("Create a new profile (admin only)")
+	.requiredOption("--name <name>")
+	.action(async (opts) => {
+		const spin = ora(`Creating profile for "${opts.name}"...`).start();
+		try {
+			const res = await createProfile(opts.name);
+			spin.succeed(chalk.green("Profile created"));
+			printTable([res.data.data]);
+		} catch (e: any) {
+			spin.fail(chalk.red(e.response?.data?.message || e.message));
+		}
+	});
 
 profiles
-  .command("export")
-  .description("Export profiles as CSV")
-  .option("--format <fmt>",   "csv", "csv")
-  .option("--gender <gender>")
-  .option("--country <country_id>")
-  .option("--age-group <age_group>")
-  .action(async (opts) => {
-    const spin = ora("Exporting profiles...").start();
-    try {
-      const params: Record<string, unknown> = {};
-      if (opts.gender)   params.gender    = opts.gender;
-      if (opts.country)  params.country_id= opts.country;
-      if (opts.ageGroup) params.age_group = opts.ageGroup;
+	.command("export")
+	.description("Export profiles as CSV")
+	.option("--format <fmt>", "csv", "csv")
+	.option("--gender <gender>")
+	.option("--country <country_id>")
+	.option("--age-group <age_group>")
+	.action(async (opts) => {
+		const spin = ora("Exporting profiles...").start();
+		try {
+			const params: Record<string, unknown> = {};
+			if (opts.gender) params.gender = opts.gender;
+			if (opts.country) params.country_id = opts.country;
+			if (opts.ageGroup) params.age_group = opts.ageGroup;
 
-      const res      = await exportProfiles(params);
-      const filename = `profiles_${Date.now()}.csv`;
-      const dest     = path.join(process.cwd(), filename);
-      fs.writeFileSync(dest, res.data as string);
-      spin.succeed(chalk.green(`Saved to ${dest}`));
-    } catch (e: any) {
-      spin.fail(chalk.red(e.response?.data?.message || e.message));
-    }
-  });
+			const res = await exportProfiles(params);
+			const filename = `profiles_${Date.now()}.csv`;
+			const dest = path.join(process.cwd(), filename);
+			fs.writeFileSync(dest, res.data as string);
+			spin.succeed(chalk.green(`Saved to ${dest}`));
+		} catch (e: any) {
+			spin.fail(chalk.red(e.response?.data?.message || e.message));
+		}
+	});
 
 // ── Table renderer ────────────────────────────────────────────────────────────
 function printTable(rows: any[]) {
-  if (!rows?.length) { console.log(chalk.yellow("No results.")); return; }
-  const t = new Table({
-    head: Object.keys(rows[0]).map(k => chalk.cyan(k)),
-    style: { compact: true },
-  });
-  rows.forEach(r => t.push(Object.values(r).map(v => String(v ?? ""))));
-  console.log(t.toString());
+	if (!rows?.length) { console.log(chalk.yellow("No results.")); return; }
+	const t = new Table({
+		head: Object.keys(rows[0]).map(k => chalk.cyan(k)),
+		style: { compact: true },
+	});
+	rows.forEach(r => t.push(Object.values(r).map(v => String(v ?? ""))));
+	console.log(t.toString());
 }
 
 program.parse();
