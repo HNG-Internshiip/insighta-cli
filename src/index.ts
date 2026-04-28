@@ -20,7 +20,7 @@ import {
 	exportProfiles, apiLogout
 } from "./api";
 
-const BASE = process.env.INSIGHTA_API_URL || "https://your-backend.railway.app";
+const BASE = "https://insightabe.netlify.net/";
 const program = new Command();
 
 program
