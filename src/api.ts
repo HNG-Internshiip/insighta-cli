@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from "axios";
 import { loadCredentials, saveCredentials, clearCredentials } from "./credentials";
 
-const BASE = "https://insightabe.netlify.net/";
+const BASE = "https://insightabe.netlify.app";
 
 function makeClient(token: string): AxiosInstance {
 	return axios.create({

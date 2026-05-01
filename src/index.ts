@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import "dotenv/config";
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
@@ -20,7 +19,7 @@ import {
 	exportProfiles, apiLogout
 } from "./api";
 
-const BASE = "https://insightabe.netlify.net/";
+const BASE = "https://insightabe.netlify.app";
 const program = new Command();
 
 program
@@ -159,10 +158,10 @@ profiles
 	});
 
 profiles
-  .command("search <query>")
-  .description("Natural language profile search")
-  .option("--page <n>",  "Page number",      (v: string) => parseInt(v, 10))
-  .option("--limit <n>", "Results per page",  (v: string) => parseInt(v, 10))
+	.command("search <query>")
+	.description("Natural language profile search")
+	.option("--page <n>", "Page number", (v) => parseInt(v, 10))
+	.option("--limit <n>", "Results per page", (v) => parseInt(v, 10))
 	.action(async (query, opts) => {
 		const spin = ora(`Searching: "${query}"...`).start();
 		try {
